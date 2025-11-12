@@ -1,0 +1,82 @@
+name: Email Reminder Service
+
+on:
+  # 允许手动运行 (用于测试)
+  workflow_dispatch:
+    inputs:
+      task_name:
+        description: '任务类型 (midday 或 evening)'
+        required: true
+        default: 'midday'
+
+  # -------------------------------------------------------------
+  # ⚠️ Cron 表达式是 UTC 时间，北京时间 (UTC+8) 需要减去 8 小时。
+  # -------------------------------------------------------------
+  
+  schedule:
+    # 1. 周一到周六 12:30 中午提醒 (UTC 04:30)
+    - cron: '30 4 * * 1-6'
+    
+    # 2. 周一到周五 23:00 晚上提醒 (UTC 15:00)
+    - cron: '0 15 * * 1-5'
+
+
+jobs:
+  send_reminder:
+    runs-on: ubuntu-latest
+    
+    # ⚠️ 确保在 Settings > Secrets and variables > Actions 中设置以下 Secrets
+    env:
+      # SMTP 配置
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+      SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }} # 授权码！
+      # 接收者列表 (用逗号分隔，例如: "a@a.com,b@b.com")
+      RECEIVER_EMAILS: ${{ secrets.RECEIVER_EMAILS }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+        
+    - name: Install dependencies
+      run: pip install requests # requests虽然不用，但保留以防将来扩展
+      
+    - name: Determine task name and run script
+      run: |
+        TRIGGER_EVENT="${{ github.event_name }}"
+        TASK_NAME=""
+
+        if [ "$TRIGGER_EVENT" = "workflow_dispatch" ]; then
+          # --- 手动触发 ---
+          TASK_NAME="${{ github.event.inputs.task_name }}"
+          echo "ℹ️ 手动触发模式。任务: $TASK_NAME"
+
+        elif [ "$TRIGGER_EVENT" = "schedule" ]; then
+          # --- 定时触发 ---
+          UTC_HOUR=$(date -u +%H)
+          UTC_MINUTE=$(date -u +%M)
+
+          if [ "$UTC_HOUR" -eq 4 ] && [ "$UTC_MINUTE" -eq 30 ]; then
+            # UTC 04:30 对应本地 12:30
+            TASK_NAME="midday"
+          elif [ "$UTC_HOUR" -eq 15 ] && [ "$UTC_MINUTE" -eq 0 ]; then
+            # UTC 15:00 对应本地 23:00
+            TASK_NAME="evening"
+          else
+            echo "Error: Job triggered at an unexpected UTC time ($UTC_HOUR:$UTC_MINUTE). Skipping."
+            exit 1
+          fi
+          echo "ℹ️ 定时触发模式。任务: $TASK_NAME"
+          
+        else
+          echo "Warning: Job triggered by unexpected event ($TRIGGER_EVENT). Skipping."
+          exit 0
+        fi
+        
+        # 运行 Python 脚本
+        python reminder.py "$TASK_NAME"
