@@ -17,8 +17,8 @@ RECEIVER_EMAILS = [email.strip() for email in RECEIVER_EMAILS_STR.split(',') if 
 
 # 脚本运行配置
 HOLIDAYS_FILE_PATH = "holidays.txt"
-REMINDER_SUBJECT_MIDDAY = "中午打卡提醒：勿忘提交GitHub代码"
-REMINDER_SUBJECT_EVENING = "晚上打卡提醒：勿忘提交GitHub代码"
+REMINDER_SUBJECT_MIDDAY = "中午不回宿舍打卡提醒"
+REMINDER_SUBJECT_EVENING = "23点打卡提醒"
 
 def load_holidays(file_path):
     """从文件中加载节假日日期集合。"""
@@ -47,7 +47,7 @@ def send_email_notification(subject, receivers):
         return False
 
     body = f"""
-    这是一封自动发送的学习打卡提醒邮件。
+    这是一封自动发送的Beeminder学习打卡提醒邮件。
     
     请确认您已完成或即将完成：
     1. 学习任务。
