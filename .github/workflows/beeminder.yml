@@ -69,27 +69,50 @@ jobs:
       
     - name: Determine local time and run script
       run: |
-        # 1. 获取当前 UTC 小时和分钟 (Action 运行的时间)
-        UTC_HOUR=$(date -u +%H)
-        UTC_MINUTE=$(date -u +%M)
-
-        # 2. 根据 UTC 时间确定要执行的本地任务参数
-        # 这里的逻辑是根据 Actions 运行的时间来判断它是由哪个 Cron 触发的，
-        # 进而决定要传入哪个“检查窗口”参数。
+        # 1. 检查触发事件类型 (手动触发 vs. 定时触发)
+        TRIGGER_EVENT="${{ github.event_name }}"
         
-        if [ "$UTC_HOUR" -eq 19 ] && [ "$UTC_MINUTE" -eq 0 ]; then
-          # 匹配 14:00 任务 (UTC 19:00)
-          LOCAL_HOUR=14
-          CHECK_START_HOUR=12
-          CHECK_END_MINUTE=00
-        elif [ "$UTC_HOUR" -eq 4 ] && [ "$UTC_MINUTE" -eq 50 ]; then
-          # 匹配 23:50 任务 (UTC 04:50)
-          LOCAL_HOUR=23
-          CHECK_START_HOUR=23
-          CHECK_END_MINUTE=50
+        if [ "$TRIGGER_EVENT" = "workflow_dispatch" ]; then
+          # --- 逻辑 A: 手动触发 (直接使用用户输入的参数) ---
+          LOCAL_HOUR="${{ github.event.inputs.local_hour }}"
+          CHECK_START_HOUR="${{ github.event.inputs.check_start_hour }}"
+          CHECK_END_MINUTE="${{ github.event.inputs.check_end_minute }}"
+          
+          echo "✅ 触发模式: 手动。使用输入参数:"
+          echo "   本地小时: ${LOCAL_HOUR}"
+          echo "   检查开始小时: ${CHECK_START_HOUR}"
+          echo "   检查结束分钟: ${CHECK_END_MINUTE}"
+
+        elif [ "$TRIGGER_EVENT" = "schedule" ]; then
+          # --- 逻辑 B: 定时触发 (根据 UTC 时间匹配任务) ---
+          
+          # 1. 获取当前 UTC 小时和分钟 (Action 运行的时间)
+          UTC_HOUR=$(date -u +%H)
+          UTC_MINUTE=$(date -u +%M)
+
+          # 2. 根据 UTC 时间确定要执行的本地任务参数
+          if [ "$UTC_HOUR" -eq 19 ] && [ "$UTC_MINUTE" -eq 0 ]; then
+            # 匹配 14:00 任务 (UTC 19:00)
+            LOCAL_HOUR=14
+            CHECK_START_HOUR=12
+            CHECK_END_MINUTE=00
+          elif [ "$UTC_HOUR" -eq 4 ] && [ "$UTC_MINUTE" -eq 50 ]; then
+            # 匹配 23:50 任务 (UTC 04:50)
+            LOCAL_HOUR=23
+            CHECK_START_HOUR=23
+            CHECK_END_MINUTE=50
+          else
+            # 如果 Cron 运行时间与预设的 19:00 或 04:50 不符，则跳过（安全检查）
+            echo "Error: Job triggered at an unexpected UTC time ($UTC_HOUR:$UTC_MINUTE). Skipping."
+            exit 1
+          fi
+          echo "✅ 触发模式: 定时。匹配任务:"
+          echo "   本地小时: ${LOCAL_HOUR}"
+          
         else
-          echo "Error: Job triggered at an unexpected UTC time ($UTC_HOUR:$UTC_MINUTE). Skipping."
-          exit 1
+          # 既不是手动也不是定时触发 (例如 Push, Pull Request 等)
+          echo "Warning: Job triggered by unexpected event ($TRIGGER_EVENT). Skipping."
+          exit 0
         fi
         
         # 3. 运行 Python 脚本
