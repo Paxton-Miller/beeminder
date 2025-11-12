@@ -1,2 +1,2 @@
-# beeminder
+# Beeminder
 A beeminder automation program.
