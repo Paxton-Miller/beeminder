@@ -116,8 +116,7 @@ def main():
     
     # 将时间转换为您要求的时区 (假设为 UTC-5 或 EST)
     # ⚠️ 请根据您实际需要的时区（例如北京时间 UTC+8 或 EST UTC-5）调整这个偏移量
-    # 鉴于您的环境是 EST (UTC-5)，我们使用这个偏移量
-    LOCAL_TZ_OFFSET = datetime.timedelta(hours=-5)
+    LOCAL_TZ_OFFSET = datetime.timedelta(hours=8)
     now_local = now_utc + LOCAL_TZ_OFFSET
 
     today_date_str = now_local.strftime('%Y-%m-%d')
