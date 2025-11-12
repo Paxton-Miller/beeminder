@@ -100,7 +100,7 @@ def submit_to_beeminder(value, comment):
 
 def main():
     if len(sys.argv) != 4:
-        print("用法: python beeminder_automation.py <local_hour> <check_start_hour> <check_end_minute>")
+        print("用法: python beeminder.py <local_hour> <check_start_hour> <check_end_minute>")
         sys.exit(1)
 
     # 命令行参数 (由 Actions 传入)

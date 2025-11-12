@@ -117,7 +117,7 @@ jobs:
         
         # 3. 运行 Python 脚本
         # 传入参数: 当前本地小时 | 检查开始小时 | 检查结束分钟
-        python beeminder_automation.py "$LOCAL_HOUR" "$CHECK_START_HOUR" "$CHECK_END_MINUTE"
+        python beeminder.py "$LOCAL_HOUR" "$CHECK_START_HOUR" "$CHECK_END_MINUTE"
       env:
         # GITHUB_TOKEN 用于访问 GitHub API，获取提交记录
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
