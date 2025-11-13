@@ -1,4 +1,5 @@
 name: Beeminder Commit Tracker
+
 on:
   # 允许手动运行 (用于测试)
   workflow_dispatch:
@@ -12,48 +13,29 @@ on:
         required: true
         default: '12'
       check_end_minute:
-        description: '检查窗口结束分钟 (00 或 50)'
+        description: '检查窗口结束分钟 (00 或 30/50)' # 修正描述
         required: true
         default: '00'
+        
   # 使用 schedule 事件来定义定时任务
   schedule:
     # -------------------------------------------------------------
-    # ⚠️ Cron 表达式是 UTC 时间，请务必将您的本地时间转换为 UTC。
-    # 假设您的本地时间是 EST (UTC-5)。
-    # EST 14:00 = UTC 19:00 (14 + 5)
-    # EST 23:50 = UTC 04:50 (23:50 + 5小时 = 次日 04:50)
-    # -------------------------------------------------------------
+    # UTC+8 14:00 任务 (检查 12:00-14:00) = UTC 06:00
+    - cron: '0 6 * * *'
     
-    # 周一到周五 中午 14:00 任务 (UTC 19:00)
-    - cron: '0 19 * * 1-5'
-    
-    # 周一到周五 晚上 23:50 任务 (UTC 次日 04:50)
-    - cron: '50 4 * * 1-5'
-    
-    # 周六 中午 14:00 任务 (UTC 19:00)
-    - cron: '0 19 * * 6'
-    
-    # 周六 晚上 23:50 任务 (伪提交) (UTC 次日 04:50)
-    - cron: '50 4 * * 6'
-    
-    # 周日 中午 14:00 任务 (伪提交) (UTC 19:00)
-    - cron: '0 19 * * 0'
-    
-    # 周日 晚上 23:50 任务 (伪提交) (UTC 次日 04:50)
-    - cron: '50 4 * * 0'
+    # UTC+8 23:35 任务 (检查 23:00-23:30) = UTC 15:35
+    - cron: '35 15 * * *'
 
 jobs:
   run_beeminder_check:
     runs-on: ubuntu-latest
     
-    # ⚠️ 您需要在 Settings > Secrets and variables > Actions 中设置这些 Secret
     env:
       BEEMINDER_USERNAME: ${{ secrets.BEEMINDER_USERNAME }}
       BEEMINDER_AUTH_TOKEN: ${{ secrets.BEEMINDER_AUTH_TOKEN }}
       BEEMINDER_GOAL_NAME: ${{ secrets.BEEMINDER_GOAL_NAME }}
-      # 仓库信息
-      REPO_OWNER: ${{ github.repository_owner }} # 自动获取仓库拥有者
-      REPO_NAME: ${{ github.event.repository.name }} # 自动获取仓库名称
+      REPO_OWNER: ${{ github.repository_owner }}
+      REPO_NAME: ${{ github.event.repository.name }}
 
     steps:
     - name: Checkout code
@@ -86,38 +68,41 @@ jobs:
         elif [ "$TRIGGER_EVENT" = "schedule" ]; then
           # --- 逻辑 B: 定时触发 (根据 UTC 时间匹配任务) ---
           
-          # 1. 获取当前 UTC 小时和分钟 (Action 运行的时间)
           UTC_HOUR=$(date -u +%H)
           UTC_MINUTE=$(date -u +%M)
 
           # 2. 根据 UTC 时间确定要执行的本地任务参数
-          if [ "$UTC_HOUR" -eq 19 ] && [ "$UTC_MINUTE" -eq 0 ]; then
-            # 匹配 14:00 任务 (UTC 19:00)
+          if [ "$UTC_HOUR" -eq 6 ]; then
+            # ✅ 匹配 UTC+8 14:xx 任务 (UTC 06:xx)
+            # 检查窗口：12:00 到 14:00
             LOCAL_HOUR=14
             CHECK_START_HOUR=12
             CHECK_END_MINUTE=00
-          elif [ "$UTC_HOUR" -eq 4 ] && [ "$UTC_MINUTE" -eq 50 ]; then
-            # 匹配 23:50 任务 (UTC 04:50)
+          elif [ "$UTC_HOUR" -eq 15 ]; then
+            # ✅ 匹配 UTC+8 23:xx 任务 (UTC 15:xx)
+            # 检查窗口：23:00 到 23:30 (允许 23:35 左右启动)
             LOCAL_HOUR=23
             CHECK_START_HOUR=23
-            CHECK_END_MINUTE=50
+            CHECK_END_MINUTE=30 # 新的结束分钟
           else
-            # 如果 Cron 运行时间与预设的 19:00 或 04:50 不符，则跳过（安全检查）
+            # 允许 Action 在设定的 UTC 小时内启动（即使有延迟）
             echo "Error: Job triggered at an unexpected UTC time ($UTC_HOUR:$UTC_MINUTE). Skipping."
             exit 1
           fi
-          echo "✅ 触发模式: 定时。匹配任务:"
-          echo "   本地小时: ${LOCAL_HOUR}"
+          echo "✅ 触发模式: 定时。匹配 UTC 任务 $UTC_HOUR:$UTC_MINUTE，检查窗口 ${CHECK_START_HOUR}:00 - ${LOCAL_HOUR}:${CHECK_END_MINUTE}"
           
         else
-          # 既不是手动也不是定时触发 (例如 Push, Pull Request 等)
-          echo "Warning: Job triggered by unexpected event ($TRIGGER_EVENT). Skipping."
-          exit 0
+          # --- 逻辑 C: 应对其他触发事件 ---
+          # 只需要警告，不再 exit 0 或 exit 1
+          echo "Warning: Job triggered by unexpected event ($TRIGGER_EVENT). Running with default parameters."
+          # 传入默认参数，让 Python 脚本自行判断是否执行
+          LOCAL_HOUR=14
+          CHECK_START_HOUR=12
+          CHECK_END_MINUTE=00
         fi
         
         # 3. 运行 Python 脚本
         # 传入参数: 当前本地小时 | 检查开始小时 | 检查结束分钟
         python beeminder.py "$LOCAL_HOUR" "$CHECK_START_HOUR" "$CHECK_END_MINUTE"
       env:
-        # GITHUB_TOKEN 用于访问 GitHub API，获取提交记录
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

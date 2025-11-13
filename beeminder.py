@@ -100,24 +100,19 @@ def submit_to_beeminder(value, comment):
 
 def main():
     if len(sys.argv) != 4:
+        # 这个检查保留，如果 Actions 未传参会立即报错
         print("用法: python beeminder.py <local_hour> <check_start_hour> <check_end_minute>")
         sys.exit(1)
 
     # 命令行参数 (由 Actions 传入)
     local_hour = int(sys.argv[1])            # 当前执行任务的本地小时 (14 或 23)
     check_start_hour = int(sys.argv[2])      # 要求提交的开始时间 (12 或 23)
-    check_end_minute = int(sys.argv[3])      # 要求提交的结束分钟 (14:00 对应 00, 23:50 对应 50)
+    check_end_minute = int(sys.argv[3])      # 要求提交的结束分钟 (14:00 对应 00, 23:30 对应 30)
 
-    # 获取当前 UTC 时间，并将其转换为东八区 (EST) 时间，用于判断日期和星期
-    # 注意：您的时区是 EST (美国东部时间)，而不是中国时区的 UTC+8。
-    # 我假设您的要求中的 14:00 和 23:50 指的是您所在时区的时间。
-    # 这里我们使用 Action 的运行时间作为“当前时间”
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    
-    # 将时间转换为您要求的时区 (假设为 UTC-5 或 EST)
-    # ⚠️ 请根据您实际需要的时区（例如北京时间 UTC+8 或 EST UTC-5）调整这个偏移量
+    # 获取当前 UTC 时间，并将其转换为 UTC+8 (北京时间)
     LOCAL_TZ_OFFSET = datetime.timedelta(hours=8)
-    now_local = now_utc + LOCAL_TZ_OFFSET
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_local = now_utc + LOCAL_TZ_OFFSET # now_local 是 Action 实际运行的 UTC+8 时间
 
     today_date_str = now_local.strftime('%Y-%m-%d')
     day_of_week = now_local.weekday() # 0=周一, 6=周日
@@ -129,10 +124,13 @@ def main():
     # --- 逻辑判断：伪提交 (豁免) 优先 ---
     is_holiday = today_date_str in HOLIDAYS
     is_sunday = day_of_week == 6
-    is_saturday_night_fake_submit = (day_of_week == 5 and local_hour == 23 and check_end_minute == 50)
+    
+    # 周六晚豁免的判断逻辑，基于传入的参数来确定是否是晚上任务 (检查 23:00-23:30)
+    is_saturday_night_fake_submit = (day_of_week == 5 and local_hour == 23 and check_end_minute == 30)
     
     if is_holiday or is_sunday or is_saturday_night_fake_submit:
         # --- 伪提交逻辑 (节假日/周日/周六晚上) ---
+        # 注意：现在周六晚上任务是检查 23:00-23:30，它会被识别为豁免日
         print(f"ℹ️ 当前是豁免日 (节假日/周日/周六晚上)，执行伪提交。")
         submit_to_beeminder(FAKE_SUBMISSION_VALUE, FAKE_COMMENT)
         return
@@ -140,6 +138,7 @@ def main():
     # --- 正常打卡逻辑 (周一到周六中午, 周一到周五晚上) ---
     
     # 确定要求提交的时间窗口 (本地时间)
+    # ⚠️ 这里的 local_hour 和 check_end_minute 现在准确定义了检查窗口的结束时间
     check_window_start = now_local.replace(hour=check_start_hour, minute=0, second=0, microsecond=0)
     check_window_end = now_local.replace(hour=local_hour, minute=check_end_minute, second=0, microsecond=0)
     
@@ -147,7 +146,6 @@ def main():
     latest_commit_time_utc = get_latest_commit_time()
     
     if latest_commit_time_utc is None:
-        # 无法获取提交时间，提交失败 (0) 以警示
         submit_to_beeminder(0, "失败: 无法获取 GitHub 提交时间")
         return
         
@@ -160,7 +158,6 @@ def main():
         submit_to_beeminder(NORMAL_SUBMISSION_VALUE, NORMAL_COMMENT)
     else:
         print(f"❌ 提交时间 {latest_commit_time_local.strftime('%Y-%m-%d %H:%M:%S')} 不在要求的时间窗口内 ({check_window_start.strftime('%H:%M')} - {check_window_end.strftime('%H:%M')})。")
-        # 失败提交 (0)
         submit_to_beeminder(0, "失败: 未在要求时间段内监测到 GitHub 提交")
 
 if __name__ == "__main__":
