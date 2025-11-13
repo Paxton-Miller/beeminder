@@ -14,7 +14,12 @@ cd "$SCRIPT_DIR"
 # 注意：敏感信息最好通过配置文件或服务器环境变量管理，但为了演示，这里直接赋值。
 
 # 🚨 替换为您真实的 Beeminder 和 GitHub Token/信息
-# 一些全局变量的声明
+export BEEMINDER_USERNAME="paxton"
+export BEEMINDER_AUTH_TOKEN="YOURBEEMINDER_AUTH_TOKEN"
+export BEEMINDER_GOAL_NAME="bytedance"
+export GITHUB_TOKEN="YOURGITHUBTOKEN"
+export REPO_OWNER="Paxton-Miller"
+export REPO_NAME="beeminder"
 
 
 # 3. 检查并安装 Python 依赖
